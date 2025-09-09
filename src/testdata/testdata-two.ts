@@ -1,6 +1,9 @@
-import { IIntervalRequestBody } from "@/interfaces/interval.interface";
+import {
+  IIntervalNode,
+  IIntervalRequestBody,
+} from "@/interfaces/interval.interface";
 
-export const input: IIntervalRequestBody = {
+export const input_data_two: IIntervalRequestBody = {
   includedInterval: [
     {
       from: 50,
@@ -14,7 +17,7 @@ export const input: IIntervalRequestBody = {
   excludedInterval: [],
 };
 
-export const output = [
+export const output_data_two: IIntervalNode[] = [
   {
     from: 10,
     to: 5000,
