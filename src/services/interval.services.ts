@@ -49,74 +49,72 @@ export const evaluateInterval = (
   const { includedInterval, excludedInterval } = interval;
 
   // Sort the interval in ascending order
-  const sortedIncludedInterval = includedInterval.sort(
+  includedInterval.sort(
     (interval1, interval2) => interval1.from - interval2.from
   );
-  const sortedExcludedInterval = excludedInterval.sort(
+  excludedInterval.sort(
     (interval1, interval2) => interval1.from - interval2.from
   );
 
   // Merge the incuded and excluded nodes in case if they have mutually overlapping entries
   // Example: 10-100, 60-180 is same as 10-180
-  const mergedIncludedInterval = mergeOverlappingIntervals(
-    sortedIncludedInterval
-  );
-  const mergedExcludedInterval = mergeOverlappingIntervals(
-    sortedExcludedInterval
-  );
+  const mergedIncludedInterval = mergeOverlappingIntervals(includedInterval);
+  const mergedExcludedInterval = mergeOverlappingIntervals(excludedInterval);
 
-  const minValue = mergedIncludedInterval.length
+  const minBoundary = mergedIncludedInterval.length
     ? mergedIncludedInterval[0].from
     : 0;
-  const maxValue = mergedIncludedInterval.length
+  const maxBoundary = mergedIncludedInterval.length
     ? mergedIncludedInterval[mergedIncludedInterval.length - 1].to
     : 0;
 
-  const negationOfExcludedInterval =
-    mergedExcludedInterval.length === 0
-      ? mergedIncludedInterval
-      : mergedExcludedInterval.flatMap((node, index) => {
-          const returnArray = [];
-          // First Node
-          if (index === 0) {
-            returnArray.push({
-              from: minValue,
-              to: node.from - 1,
-            });
-          }
-          if (index > 0 && index !== mergedExcludedInterval.length - 1) {
-            // Intermediate nodes
-            returnArray.push({
-              from: mergedExcludedInterval[index - 1].to + 1,
-              to: node.from - 1,
-            });
-          }
-          if (mergedExcludedInterval.length === 1) {
-            // If there is only one element in the exclude array
-            // we should manually add the values from that specific node to the max value in the include array
-            returnArray.push({
-              from: node.to + 1,
-              to: maxValue,
-            });
-          }
+  let negationOfExcludedInterval: IIntervalNode[] = [];
+  if (mergedExcludedInterval.length === 0) {
+    negationOfExcludedInterval = mergedIncludedInterval;
+  } else {
+    mergedExcludedInterval.forEach((currentNode, index) => {
+      // You have to run the logic on only those lines which starts before maxBoundary and ends after minBoundary
+      if (currentNode.to > minBoundary && currentNode.from < maxBoundary) {
+        const previousNode =
+          index === 0 ? undefined : mergedExcludedInterval[index - 1];
+        const nextNode =
+          index === mergedExcludedInterval.length - 1
+            ? undefined
+            : mergedExcludedInterval[index + 1];
 
-          if (
-            index === mergedExcludedInterval.length - 1 &&
-            mergedExcludedInterval.length > 1
-          ) {
-            // Last Node
-            returnArray.push({
-              from: mergedExcludedInterval[index - 1].to + 1,
-              to: node.from - 1,
-            });
-            returnArray.push({
-              from: node.to + 1,
-              to: maxValue,
+        // First node
+        // if the first node starts before the min boundary, skip it
+        if (previousNode === undefined && currentNode.from > minBoundary) {
+          negationOfExcludedInterval.push({
+            from: minBoundary,
+            to: currentNode.from - 1,
+          });
+        }
+
+        // Intermediate nodes
+        if (previousNode !== undefined && nextNode !== undefined) {
+          negationOfExcludedInterval.push({
+            from: Math.max(minBoundary, currentNode.to + 1),
+            to: Math.min(maxBoundary, nextNode.from - 1),
+          });
+        }
+
+        // Last Node
+        if (nextNode === undefined && currentNode.to < maxBoundary) {
+          if (previousNode !== undefined) {
+            negationOfExcludedInterval.push({
+              from: previousNode.to + 1,
+              to: currentNode.from - 1,
             });
           }
-
-          return returnArray;
-        });
+          negationOfExcludedInterval.push({
+            from: currentNode.to + 1,
+            to: maxBoundary,
+          });
+        }
+      }
+    });
+  }
 
   const finalInterval: IIntervalNode[] = [];
 
@@ -133,6 +131,5 @@ export const evaluateInterval = (
       }
     });
   });
-
   return finalInterval;
 };
