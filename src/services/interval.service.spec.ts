@@ -5,7 +5,7 @@ import { input_data_three, output_data_three } from "@/testdata/testdata-three";
 import { input_data_four, output_data_four } from "@/testdata/testdata-four";
 import { input_data_five, output_data_five } from "@/testdata/testdata-five";
 
-describe("sum", () => {
+describe("interval checker", () => {
   test("testing dataset 1", () => {
     expect(evaluateInterval(input_data_one)).toEqual(output_data_one);
   });
