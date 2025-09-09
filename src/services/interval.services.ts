@@ -96,6 +96,7 @@ export const evaluateInterval = (
 
         // If you have a previous node, this only means this can never be the "first node"
         // This can either be the intermeadiate node or the last node
+        // For both case add the information from the previous node end point to the current node start point to exclude array
         if (previousNode !== undefined) {
           negationOfExcludedInterval.push({
             from: previousNode.to + 1,
