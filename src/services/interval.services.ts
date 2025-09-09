@@ -3,32 +3,40 @@ import {
   IIntervalRequestBody,
 } from "@/interfaces/interval.interface";
 
-const mergeOverlappingIntervals = (intervals: IIntervalNode[]) => {
-  const mergedIntervals: IIntervalNode[] = [];
-  intervals.forEach((intervalNode) => {
-    // Find from the merged array if there exists any node that over lap the current node from function param
-    const overlappingInterval = mergedIntervals.find(
-      (node) =>
-        Math.max(node.from, intervalNode.from) <
-        Math.min(node.to, intervalNode.to)
-    );
-    // If there is a matching node exists that is already overlapping
-    // Rewrite the from and to of that specific node
-    if (overlappingInterval) {
-      overlappingInterval.from = Math.min(
-        overlappingInterval.from,
-        intervalNode.from
-      );
-      overlappingInterval.to = Math.max(
-        overlappingInterval.to,
-        intervalNode.to
-      );
+/**
+ * @description Function to recieve the interval list and merge them if they have overlapping end and start coordinates
+ * @param intervals - Array of intervals having nodes "from" and "to"
+ * @returns - Sorted and merged array based on the overlapping of adjacent nodes
+ */
+const sortAndMergeOverlappingIntervals = (intervals: IIntervalNode[]) => {
+  // Sort the intervals based on the key "from" in ascending order
+  const sortedInterval = [...intervals].sort(
+    (interval1, interval2) => interval1.from - interval2.from
+  );
+
+  /**
+   * To finish the merging in one single loop,
+   * we create a "merged" array and keep the first node in the "sorted array" to it
+   * we run the loop in the "sorted array" from index 1 to the last one
+   * if the adjecent nodes overlap, "to" value of the "previous node" will be greater than or equal to "from" value of "cuurrent node"
+   * if they overlap, overwrite the to value of the last node, if not push current node to "mergedIntervals"
+   */
+  const mergedIntervals: IIntervalNode[] = sortedInterval.length
+    ? [sortedInterval[0]]
+    : [];
+
+  for (let i = 1; i < sortedInterval.length; i++) {
+    const currentInterval = sortedInterval[i];
+    const previousInterval = mergedIntervals[mergedIntervals.length - 1];
+    if (previousInterval.to >= currentInterval.from) {
+      previousInterval.to = Math.max(previousInterval.to, currentInterval.to);
     } else {
-      mergedIntervals.push(intervalNode);
+      mergedIntervals.push(currentInterval);
     }
-  });
+  }
   return mergedIntervals;
 };
+
 /**
  * @description Function that evaluates the payload and calculate the overlappings
  * @param interval: This is the interval details that we are recieving from the request body
@@ -41,25 +49,20 @@ const mergeOverlappingIntervals = (intervals: IIntervalNode[]) => {
  *      This is because if there are twoi enrtries like 10-100, 60-180 either in includes or exludes array
  *      We should consider this as one single entry 10-180, this is clearly one single line
  *  3.  Now when this over lapping is fixed we have the sorted set of information with unique "from" and "to" points
- *      Loop through each of the includes array against
+ *      Loop through each of the excludes array and fins its negated part within min and max limits of the incudes data set
+ *  4.  The intersection between the negates data set and the includes dataset is the final value for us
  */
 export const evaluateInterval = (
   interval: IIntervalRequestBody
 ): IIntervalNode[] => {
   const { includedInterval, excludedInterval } = interval;
 
-  // Sort the interval in ascending order
-  includedInterval.sort(
-    (interval1, interval2) => interval1.from - interval2.from
-  );
-  excludedInterval.sort(
-    (interval1, interval2) => interval1.from - interval2.from
-  );
-
   // Merge the incuded and excluded nodes in case if they have mutually overlapping entries
   // Example: 10-100, 60-180 is same as 10-180
-  const mergedIncludedInterval = mergeOverlappingIntervals(includedInterval);
-  const mergedExcludedInterval = mergeOverlappingIntervals(excludedInterval);
+  const mergedIncludedInterval =
+    sortAndMergeOverlappingIntervals(includedInterval);
+  const mergedExcludedInterval =
+    sortAndMergeOverlappingIntervals(excludedInterval);
 
   const minBoundary = mergedIncludedInterval.length
     ? mergedIncludedInterval[0].from
@@ -91,22 +94,18 @@ export const evaluateInterval = (
           });
         }
 
-        // Intermediate nodes
-        if (previousNode !== undefined && nextNode !== undefined) {
+        // If you have a previous node, this only means this can never be the "first node"
+        // This can either be the intermeadiate node or the last node
+        if (previousNode !== undefined) {
           negationOfExcludedInterval.push({
-            from: Math.max(minBoundary, currentNode.to + 1),
-            to: Math.min(maxBoundary, nextNode.from - 1),
+            from: previousNode.to + 1,
+            to: currentNode.from - 1,
           });
         }
 
         // Last Node
         if (nextNode === undefined && currentNode.to < maxBoundary) {
-          if (previousNode !== undefined) {
-            negationOfExcludedInterval.push({
-              from: previousNode.to + 1,
-              to: currentNode.from - 1,
-            });
-          }
+          // Adding information about last node till maxBoundary
           negationOfExcludedInterval.push({
             from: currentNode.to + 1,
             to: maxBoundary,
@@ -115,7 +114,6 @@ export const evaluateInterval = (
       }
     });
   }
-
   const finalInterval: IIntervalNode[] = [];
 
   // Find the overlap between negationOfExcludedInterval and mergedIncludedInterval
